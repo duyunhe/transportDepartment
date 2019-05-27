@@ -394,13 +394,32 @@ def ins_from_route2(conn, begin_data, end_data, route):
     cursor.close()
 
 
-def fetch0(veh, org_list):
-    db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
+def fetch0(conn, veh, org_list):
+    if len(org_list) == 0:
+        return
     data_list = []
     for vdata in org_list:
         cs = vdata.carstate
         ch = vdata.state[-1]
         if ch == '3' and cs == '1':
+            data_list.append(vdata)
+
+    if 0 < len(data_list) < 60:
+        sup_cnt = random.randint(61, 100) - len(data_list)
+        print veh, sup_cnt
+        if data_list[0].speed_time.hour == 0:
+            ins(conn, data_list[-1], sup_cnt, False)
+        else:
+            ins(conn, data_list[0], sup_cnt, True)
+
+
+def fetch_with_0704(veh, org_list):
+    db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
+    data_list = []
+    for vdata in org_list:
+        cs = vdata.carstate
+        ch = vdata.state[-1]
+        if ch == '3' and (cs == '1' or cs == '3'):
             data_list.append(vdata)
 
     if 0 < len(data_list) < 60:
@@ -419,18 +438,9 @@ def fetch_0704(veh, org_list):
     data_list = []
     for vdata in org_list:
         cs = vdata.carstate
-        ch = vdata.state[-1]
-        if (ch == '3' or ch == '2') and (cs == '1' or cs == '3'):
+        if cs == '3':
             data_list.append(vdata)
-
-    if 0 < len(data_list) < 60:
-        sup_cnt = random.randint(61, 100) - len(data_list)
-        # print veh, sup_cnt
-        if data_list[0].speed_time.hour == 0:
-            ins(db, data_list[-1], sup_cnt, False)
-        else:
-            ins(db, data_list[0], sup_cnt, True)
-
+    ins_0704(db, data_list)
     db.close()
 
 
@@ -692,7 +702,7 @@ def get_veh_0704():
     0704补传时需要检查整天的记录，这些车辆单独分析
     :return:
     """
-    veh_list = []
+    veh_list = ['浙A6G680']
     return veh_list
 
 
@@ -706,15 +716,23 @@ def sup60(data_dict):
     veh_list = get_veh0()
     fix_list = get_veh4()       # 三辆车用其他方式补数据
     veh_0704_list = get_veh_0704()
+    db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
     for i, veh in enumerate(veh_list):
         # print veh
         if veh in veh_0704_list:
-            fetch_0704(veh, data_dict[veh])
+            fetch_with_0704(veh, data_dict[veh])
             continue
         if veh in fix_list:
             continue
-        fetch0(veh, data_dict[veh])
+        fetch0(db, veh, data_dict[veh])
     print "sup60 over"
+    db.close()
+
+
+def sup_0704(data_dict):
+    veh_0704_list = get_veh_0704()
+    for veh in veh_0704_list:
+        fetch_0704(veh, data_dict[veh])
 
 
 @debug_time
@@ -794,7 +812,7 @@ def get_data(data_dict, begin_time, end_time):
     y = begin_time.year % 100
     m = begin_time.month
     sql = "select vehicle_num, longi, lati, px, py, speed, direction, speed_time, mdtstatus, alarmstatus, carstate" \
-          " from tb_gps_{0}{1:02} where speed_time >= :1 and speed_time < :2" \
+          " from tb_gps_{0}{1:02} where speed_time >= :1 and speed_time < :2 and vehicle_num = '浙A6G680'" \
           " order by speed_time".format(y, m)
     cursor.execute(sql, (begin_time, end_time))
     for item in cursor:
@@ -818,6 +836,7 @@ def sup_data():
     get_data(td_dict, td, now)
     # get_data(yst_dict, yst, td)
     sup60(td_dict)
+    sup_0704(td_dict)
     # sup60and8(td_dict, yst_dict)
     sup15()
     sup_fix()
@@ -853,7 +872,7 @@ def delete_all_data():
     db.close()
 
 
-# sup_data()
+sup_data()
 if __name__ == '__main__':
     logging.basicConfig()
     scheduler = BlockingScheduler()
