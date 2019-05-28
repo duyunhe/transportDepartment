@@ -449,7 +449,7 @@ def fetch1(veh, td_list, yst_list):
     :param veh: 车牌号码
     :param td_list: 今天的车辆信息列表
     :param yst_list: 昨天的车辆信息列表
-    :return: 
+    :return:
     """
     db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
 
@@ -702,7 +702,7 @@ def get_veh_0704():
     0704补传时需要检查整天的记录，这些车辆单独分析
     :return:
     """
-    veh_list = ['浙A6G680']
+    veh_list = ['浙A9H189', '浙A9S685', '浙A8K587', '浙A1B826']
     return veh_list
 
 
@@ -812,7 +812,7 @@ def get_data(data_dict, begin_time, end_time):
     y = begin_time.year % 100
     m = begin_time.month
     sql = "select vehicle_num, longi, lati, px, py, speed, direction, speed_time, mdtstatus, alarmstatus, carstate" \
-          " from tb_gps_{0}{1:02} where speed_time >= :1 and speed_time < :2 and vehicle_num = '浙A6G680'" \
+          " from tb_gps_{0}{1:02} where speed_time >= :1 and speed_time < :2" \
           " order by speed_time".format(y, m)
     cursor.execute(sql, (begin_time, end_time))
     for item in cursor:
@@ -829,10 +829,10 @@ def get_data(data_dict, begin_time, end_time):
 def sup_data():
     # delete_all_data()
     td_dict = defaultdict(list)
-    yst_dict = defaultdict(list)
+    # yst_dict = defaultdict(list)
     now = datetime.now()
     td = datetime(now.year, now.month, now.day)
-    yst = td - timedelta(days=1)
+    # yst = td - timedelta(days=1)
     get_data(td_dict, td, now)
     # get_data(yst_dict, yst, td)
     sup60(td_dict)
@@ -842,7 +842,16 @@ def sup_data():
     sup_fix()
     # sup_line()
     # static_data()
-    print "全部完成", datetime.now()
+    print "7点补传全部完成", datetime.now()
+
+
+def sup_data_0704():
+    now = datetime.now()
+    td = datetime(now.year, now.month, now.day, hour=19)
+    td_dict = defaultdict(list)
+    get_data(td_dict, td, now)
+    sup_0704(td_dict)
+    print "夜间补传0704完成", datetime.now()
 
 
 def static_data():
@@ -877,4 +886,5 @@ if __name__ == '__main__':
     logging.basicConfig()
     scheduler = BlockingScheduler()
     scheduler.add_job(sup_data, 'cron', hour='19', minute='00', max_instances=10)
+    scheduler.add_job(sup_data_0704, 'cron', hour='23', minute='38', max_instances=10)
     scheduler.start()
