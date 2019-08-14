@@ -14,12 +14,14 @@ import xlrd
 import copy
 from time import clock
 from collections import defaultdict
+from strategy_missing import fetch2_0, fetch2_1
 import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 import json
 import urllib2
 from geo import gcj02towgs84, bl2xy, calc_dist, calc_segment_coor, xy2bl, transform
 import matplotlib.pyplot as plt
+from tools import delete_today_emulation
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.AL32UTF8'
 
 
@@ -252,54 +254,7 @@ def route_insert(route, cnt, begin_data, itv_list):
     return data_list
 
 
-def ins_15(conn, first_data, last_data):
-    cursor = conn.cursor()
-    ins_sql = "insert into tb_gps_simulate(vehicle_num,longi,lati,speed,direction,state,carstate,speed_time,db_time," \
-              "sign,altitude,alarmstatus,mdtstatus,sup_type) values(:1,:2,:3,:4,:5,0,1,:6,:7," \
-              "'0',:8,:9,:10,'2')"
-    tup_list = []
-    emu_list = linear_insert(first_data, last_data)
-
-    for vdata in emu_list:
-        tup = (
-        vdata.veh_no, vdata.lng, vdata.lat, vdata.speed, vdata.orient, vdata.speed_time, datetime.now(), 0, vdata.alarm,
-        vdata.state)
-        tup_list.append(tup)
-
-    cursor.executemany(ins_sql, tup_list)
-    conn.commit()
-    cursor.close()
-
-
-def ins_8(conn, first_data, last_data):
-    cursor = conn.cursor()
-    ins_sql = "insert into tb_gps_simulate(vehicle_num,longi,lati,speed,direction,state,carstate,speed_time,db_time," \
-              "sign,altitude,alarmstatus,mdtstatus,sup_type) values(:1,:2,:3,:4,:5,0,1,:6,:7," \
-              "'0',:8,:9,:10,'2')"
-    dt = first_data.speed_time
-    first_data.speed = 0
-    first_data.state = "000C0002"
-    tup_list = []
-    for i in range(8):
-        if i == 0:
-            dt += timedelta(seconds=20)
-        else:
-            dt += timedelta(minutes=15)
-        if dt < last_data.speed_time:
-            vdata = first_data
-            vdata.speed_time = dt
-            tup = (vdata.veh_no, vdata.lng, vdata.lat, vdata.speed, vdata.orient, vdata.speed_time, datetime.now(), 0,
-                   vdata.alarm, vdata.state)
-            tup_list.append(tup)
-        else:
-            break
-
-    cursor.executemany(ins_sql, tup_list)
-    conn.commit()
-    cursor.close()
-
-
-def ins_from_0704(conn, begin_data, end_data, sup_list):
+def ins_from_line(conn, begin_data, end_data, sup_list):
     cursor = conn.cursor()
     ins_sql = "insert into tb_gps_simulate(vehicle_num,longi,lati,speed,direction,state,carstate,speed_time,db_time," \
               "sign,altitude,alarmstatus,mdtstatus,sup_type) values(:1,:2,:3,:4,:5,0,1,:6,:7," \
@@ -318,7 +273,7 @@ def ins_from_0704(conn, begin_data, end_data, sup_list):
     for i, data in enumerate(in_list):
         itv = data - last_data
         if itv > 30:
-            print 0, last_data.speed_time, data.speed_time
+            # print 0, last_data.speed_time, data.speed_time
             emu_list = linear_insert(last_data, data)
             for vdata in emu_list:
                 tup = (
@@ -406,7 +361,7 @@ def fetch0(conn, veh, org_list):
 
     if 0 < len(data_list) < 60:
         sup_cnt = random.randint(61, 100) - len(data_list)
-        print veh, sup_cnt
+        # print veh, sup_cnt
         if data_list[0].speed_time.hour == 0:
             ins(conn, data_list[-1], sup_cnt, False)
         else:
@@ -436,10 +391,15 @@ def fetch_with_0704(veh, org_list):
 def fetch_0704(veh, org_list):
     db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
     data_list = []
+    last_data = None
     for vdata in org_list:
         cs = vdata.carstate
         if cs == '3':
-            data_list.append(vdata)
+            if last_data is not None:
+                itv = vdata - last_data
+                if itv > 0:
+                    data_list.append(vdata)
+            last_data = vdata
     ins_0704(db, data_list)
     db.close()
 
@@ -477,43 +437,6 @@ def fetch1(veh, td_list, yst_list):
     db.close()
 
 
-def fetch2(veh):
-    db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
-    cursor = db.cursor()
-    nw = datetime.now()
-    y = nw.year % 100
-    m = nw.month
-    # 查今天非0704数据
-    sql = "select longi, lati, speed, direction, speed_time, mdtstatus, alarmstatus, carstate" \
-          " from tb_gps_{0}{1:02} where vehicle_num = '{2}' and speed_time >= :1 and speed_time < :2" \
-          " order by speed_time".format(y, m, veh)
-    td = datetime(nw.year, nw.month, nw.day, 0, 0, 0)
-    cursor.execute(sql, (td, nw))
-    data_list = []
-    for item in cursor:
-        longi, lati, speed, direction, speed_time, mdtstatus, alarmstatus, cs = item[:]
-        vdata = VehiData(longi, lati, 0, 0, 0, speed, speed_time, veh, None, alarmstatus, mdtstatus, direction, cs)
-        ch = mdtstatus[-1]
-        if (cs == '1' or cs == '0') and (ch == '3' or ch == '2' or ch == '0'):
-            data_list.append(vdata)
-
-    last_data = None
-    for data in data_list:
-        if last_data is not None:
-            itv = (data.speed_time - last_data.speed_time).total_seconds()
-            if last_data.state[-1] == '3' and data.state[-1] == '3':
-                if 30 < itv < 900:
-                    # print "0003", veh, last_data.speed_time, data.speed_time, itv
-                    ins_15(db, last_data, data)
-                elif itv > 900:
-                    # print "0002", veh, last_data.speed_time, data.speed_time, itv
-                    ins_8(db, last_data, data)
-
-        last_data = data
-    cursor.close()
-    db.close()
-
-
 def fetch3(veh):
     db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
     cursor = db.cursor()
@@ -544,7 +467,7 @@ def fetch3(veh):
             if last_data.state[-1] == '3' and data.state[-1] == '3':
                 if itv > 30:
                     print last_data.speed_time, data.speed_time, itv
-                    ins_from_0704(db, last_data, data, sup_list)
+                    ins_from_line(db, last_data, data, sup_list)
         last_data = data
     cursor.close()
     db.close()
@@ -670,14 +593,34 @@ def get_veh1():
     return veh_list
 
 
-def get_veh2():
+def get_veh2_without_accoff_filter():
     veh_list = []
     xl = xlrd.open_workbook('sup15.xlsx')
     sheet = xl.sheet_by_index(0)
-    for i in range(100):
+    n = sheet.nrows
+    for i in range(n):
         val = sheet.cell(i, 0).value
         str_val = val.encode('utf-8')
         veh_list.append(str_val)
+    # print "all", len(veh_list), "veh"
+    return veh_list
+
+
+def get_veh2():
+    veh_list = ['浙A3E180']
+    return veh_list
+
+
+def get_veh2_with_accoff_filter():
+    veh_list = []
+    xl = xlrd.open_workbook('sup15.xlsx')
+    sheet = xl.sheet_by_index(1)
+    n = sheet.nrows
+    for i in range(n):
+        val = sheet.cell(i, 0).value
+        str_val = val.encode('utf-8')
+        veh_list.append(str_val)
+    # print "all", len(veh_list), "veh"
     return veh_list
 
 
@@ -751,7 +694,7 @@ def sup60and8(td_dict, yst_dict):
 
 
 @debug_time
-def sup15():
+def sup_missing_test():
     """
     补缺失数据 sup_type = 2
     :return:
@@ -759,8 +702,27 @@ def sup15():
     veh_list = get_veh2()
     for veh in veh_list:
         # print veh
-        fetch2(veh)
-    print "sup15 over"
+        fetch2_0(veh)
+    return
+
+
+@debug_time
+def sup_missing():
+    """
+    补缺失数据 sup_type = 2
+    :return:
+    """
+    veh_list = get_veh2_without_accoff_filter()
+    for veh in veh_list:
+        fetch2_0(veh)
+
+    now = datetime.now()
+    bt = datetime(now.year, now.month, now.day, 0)
+    veh_list = get_veh2_with_accoff_filter()        # acc 关过滤
+    for veh in veh_list:
+        fetch2_1(veh, bt, now)
+
+    print "sup 8&15 over"
 
 
 def sup_line():
@@ -838,11 +800,8 @@ def sup_data():
     sup60(td_dict)
     sup_0704(td_dict)
     # sup60and8(td_dict, yst_dict)
-    sup15()
-    sup_fix()
-    # sup_line()
-    # static_data()
-    print "7点补传全部完成", datetime.now()
+    sup_missing()
+    print "sup data completed", datetime.now()
 
 
 def sup_data_0704():
@@ -851,40 +810,24 @@ def sup_data_0704():
     td_dict = defaultdict(list)
     get_data(td_dict, td, now)
     sup_0704(td_dict)
-    print "夜间补传0704完成", datetime.now()
+    print "night 0704 completed", datetime.now()
 
 
-def static_data():
-    db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
-    cursor = db.cursor()
-    sql = "select count(*) from tb_gps_simulate"
+def sup_night():
     now = datetime.now()
-    dt = datetime(now.year, now.month, now.day)
-    cnt = 0
-    cursor.execute(sql)
-    for item in cursor:
-        cnt = int(item[0])
-    ins_sql = "insert into tb_gps_simulate3 values(:1,:2)"
-    cursor.execute(ins_sql, (cnt, dt))
-    db.commit()
-    cursor.close()
-    db.close()
+    bt = datetime(now.year, now.month, now.day, hour=19, minute=5)
+
+    veh_list = get_veh2_with_accoff_filter()  # acc 关过滤
+    for veh in veh_list:
+        fetch2_1(veh, bt, now)
+    print "night completed", datetime.now()
 
 
-def delete_all_data():
-    db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
-    cursor = db.cursor()
-    sql = "delete from tb_gps_simulate"
-    cursor.execute(sql)
-    db.commit()
-    cursor.close()
-    db.close()
-
-
-sup_data()
+delete_today_emulation()
+# sup_missing()
 if __name__ == '__main__':
     logging.basicConfig()
     scheduler = BlockingScheduler()
     scheduler.add_job(sup_data, 'cron', hour='19', minute='00', max_instances=10)
-    scheduler.add_job(sup_data_0704, 'cron', hour='23', minute='38', max_instances=10)
+    scheduler.add_job(sup_night, 'cron', hour='23', minute='25', max_instances=10)
     scheduler.start()
