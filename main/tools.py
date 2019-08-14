@@ -21,3 +21,12 @@ def delete_today_emulation():
     cur.close()
     conn.close()
 
+
+def is_acc_off(data):
+    state_off = '2'
+    return data.state[-1] == state_off
+
+
+def is_acc_on(data):
+    state_on = '3'
+    return data.state[-1] == state_on

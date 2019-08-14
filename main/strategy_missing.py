@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import copy
 import random
 from struct_808 import VehiData
+from tools import is_acc_off, is_acc_on
 
 
 def linear_insert(first_data, last_data):
@@ -129,6 +130,8 @@ def fetch2_0(veh, bt, et):
     近原地补传，此处网关未过滤ACC关，139辆
     见代码
     :param veh:
+    :param bt:
+    :param et:
     :return:
     """
     db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
@@ -156,7 +159,7 @@ def fetch2_0(veh, bt, et):
     for data in data_list:
         if last_data is not None:
             itv = (data.speed_time - last_data.speed_time).total_seconds()
-            if data.state[-1] == '3' and last_data.state[-1] == '3':
+            if is_acc_on(data) and is_acc_on(last_data):
                 if 30 < itv < 900:
                     # print "0003 ", veh, last_data.speed_time, data.speed_time, itv
                     ins_15(db, last_data, data, sup_type)
@@ -167,6 +170,12 @@ def fetch2_0(veh, bt, et):
                 if itv > 1000:      # maybe 1800 seconds or more
                     ins_off(db, last_data, data, sup_type)
         last_data = data
+
+    if last_data and is_acc_on(last_data):
+        itv = (et - last_data.speed_time).total_seconds()
+        if itv > 900:
+            ins_8(db, last_data, et, sup_type)
+
     cursor.close()
     db.close()
 
@@ -189,7 +198,8 @@ def fetch2_1(veh, bt, et):
     m = nw.month
     # 查今天非0704精确数据
     sql = "select longi, lati, speed, direction, speed_time, mdtstatus, alarmstatus, carstate" \
-          " from tb_gps_{0}{1:02} where vehicle_num = '{2}' and carstate = '1' and speed_time >= :1 and speed_time < :2" \
+          " from tb_gps_{0}{1:02} where vehicle_num = '{2}' and carstate = '1' and speed_time >= :1" \
+          " and speed_time < :2" \
           " order by speed_time".format(y, m, veh)
     cursor.execute(sql, (bt, et))
     data_list = []
@@ -198,7 +208,8 @@ def fetch2_1(veh, bt, et):
         vdata = VehiData(longi, lati, 0, 0, 0, speed, speed_time, veh, None, alarmstatus, mdtstatus, direction, cs)
         ch = mdtstatus[-1]
         # cs 为2 3 是补报
-        # ch 为3 是精确
+        # ch 为3 是精确ACC开数据
+        # 此处，只留精确ACC开，因其他数据都被过滤
         if ch == '3':
             data_list.append(vdata)
 
@@ -218,7 +229,7 @@ def fetch2_1(veh, bt, et):
     # 最后还要补8条
     if last_data:
         itv = (et - last_data.speed_time).total_seconds()
-        if itv >= 900:
+        if itv > 900:
             ins_8(db, last_data, et, sup_type)
 
     cursor.close()

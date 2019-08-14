@@ -712,12 +712,13 @@ def sup_missing():
     补缺失数据 sup_type = 2
     :return:
     """
-    veh_list = get_veh2_without_accoff_filter()
-    for veh in veh_list:
-        fetch2_0(veh)
-
     now = datetime.now()
     bt = datetime(now.year, now.month, now.day, 0)
+
+    veh_list = get_veh2_without_accoff_filter()
+    for veh in veh_list:
+        fetch2_0(veh, bt, now)
+
     veh_list = get_veh2_with_accoff_filter()        # acc 关过滤
     for veh in veh_list:
         fetch2_1(veh, bt, now)
@@ -815,7 +816,11 @@ def sup_data_0704():
 
 def sup_night():
     now = datetime.now()
-    bt = datetime(now.year, now.month, now.day, hour=19, minute=5)
+    bt = datetime(now.year, now.month, now.day, hour=19, minute=10)
+
+    veh_list = get_veh2_without_accoff_filter()
+    for veh in veh_list:
+        fetch2_0(veh, bt, now)
 
     veh_list = get_veh2_with_accoff_filter()  # acc 关过滤
     for veh in veh_list:
