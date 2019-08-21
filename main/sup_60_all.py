@@ -601,13 +601,15 @@ def get_veh2_without_accoff_filter():
     for i in range(n):
         val = sheet.cell(i, 0).value
         str_val = val.encode('utf-8')
+        if str_val[-1] == ' ':
+            str_val = str_val[:-1]
         veh_list.append(str_val)
-    # print "all", len(veh_list), "veh"
+    print "all no filter", len(veh_list), "veh"
     return veh_list
 
 
 def get_veh2():
-    veh_list = ['浙A3E180']
+    veh_list = ['浙A2X302']
     return veh_list
 
 
@@ -619,8 +621,10 @@ def get_veh2_with_accoff_filter():
     for i in range(n):
         val = sheet.cell(i, 0).value
         str_val = val.encode('utf-8')
+        if str_val[-1] == ' ':
+            str_val = str_val[:-1]
         veh_list.append(str_val)
-    # print "all", len(veh_list), "veh"
+    print "all filter", len(veh_list), "veh"
     return veh_list
 
 
@@ -699,10 +703,13 @@ def sup_missing_test():
     补缺失数据 sup_type = 2
     :return:
     """
+    now = datetime.now()
+    bt = datetime(2019, 8, 18)
+    et = bt + timedelta(days=1)
     veh_list = get_veh2()
     for veh in veh_list:
         # print veh
-        fetch2_0(veh)
+        fetch2_0(veh, bt, et)
     return
 
 
@@ -799,7 +806,7 @@ def sup_data():
     get_data(td_dict, td, now)
     # get_data(yst_dict, yst, td)
     sup60(td_dict)
-    sup_0704(td_dict)
+    # sup_0704(td_dict)
     # sup60and8(td_dict, yst_dict)
     sup_missing()
     print "sup data completed", datetime.now()

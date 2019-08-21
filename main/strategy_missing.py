@@ -160,10 +160,10 @@ def fetch2_0(veh, bt, et):
         if last_data is not None:
             itv = (data.speed_time - last_data.speed_time).total_seconds()
             if is_acc_on(data) and is_acc_on(last_data):
-                if 30 < itv < 900:
+                if 30 < itv <= 900:
                     # print "0003 ", veh, last_data.speed_time, data.speed_time, itv
                     ins_15(db, last_data, data, sup_type)
-                elif itv >= 900:
+                elif itv > 900:
                     # print "0002", veh, last_data.speed_time, data.speed_time, itv
                     ins_8(db, last_data, data.speed_time, sup_type)
             else:       # once acc off
@@ -173,7 +173,7 @@ def fetch2_0(veh, bt, et):
 
     if last_data and is_acc_on(last_data):
         itv = (et - last_data.speed_time).total_seconds()
-        if itv > 900:
+        if itv >= 900:
             ins_8(db, last_data, et, sup_type)
 
     cursor.close()
@@ -229,7 +229,7 @@ def fetch2_1(veh, bt, et):
     # 最后还要补8条
     if last_data:
         itv = (et - last_data.speed_time).total_seconds()
-        if itv > 900:
+        if itv >= 900:
             ins_8(db, last_data, et, sup_type)
 
     cursor.close()
