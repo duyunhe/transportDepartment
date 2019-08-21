@@ -15,6 +15,7 @@ import copy
 from time import clock
 from collections import defaultdict
 from strategy_missing import fetch2_0, fetch2_1
+from strategy_nodata import fetch1
 import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 import json
@@ -404,39 +405,6 @@ def fetch_0704(veh, org_list):
     db.close()
 
 
-def fetch1(veh, td_list, yst_list):
-    """
-    :param veh: 车牌号码
-    :param td_list: 今天的车辆信息列表
-    :param yst_list: 昨天的车辆信息列表
-    :return:
-    """
-    db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
-
-    data_list = []
-    last_valid_data = None
-    for vdata in td_list:
-        mdtstatus, cs = vdata.state, vdata.carstate
-        ch = mdtstatus[-1]
-        if ch == '3' and cs == '1':
-            data_list.append(vdata)
-        if ch == '3' or ch == '2':
-            last_valid_data = vdata
-    # 无数据时还需要去查前一天
-    if len(data_list) == 0:
-        for vdata in yst_list:
-            mdtstatus, cs = vdata.state, vdata.carstate
-            ch = mdtstatus[-1]
-            if ch == '3' or ch == '2':
-                last_valid_data = vdata
-        if last_valid_data is not None:
-            print veh, "empty"
-            ins_empty(
-                conn=db, gps_data=last_valid_data, sup_cnt=random.randint(60, 70)
-            )
-    db.close()
-
-
 def fetch3(veh):
     db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
     cursor = db.cursor()
@@ -585,11 +553,11 @@ def get_veh1():
     veh_list = []
     xl = xlrd.open_workbook('sup60_8.xlsx')
     sheet = xl.sheet_by_index(0)
-    for i in range(2677):
+    for i in range(4):
         val = sheet.cell(i, 0).value
         str_val = val.encode('utf-8')
         veh_list.append(str_val)
-    print len(veh_list)
+    print "no data", len(veh_list)
     return veh_list
 
 
@@ -683,21 +651,6 @@ def sup_0704(data_dict):
 
 
 @debug_time
-def sup60and8(td_dict, yst_dict):
-    """
-    完全无数据，补60+8   sup_type = 1
-    :return:
-    """
-    veh_list = get_veh1()
-    for i, veh in enumerate(veh_list):
-        # print veh
-        fetch1(veh, td_dict[veh], yst_dict[veh])
-        if i % 100 == 0:
-            print "sup60&8", i
-    print "sup60and8 over"
-
-
-@debug_time
 def sup_missing_test():
     """
     补缺失数据 sup_type = 2
@@ -731,6 +684,22 @@ def sup_missing():
         fetch2_1(veh, bt, now)
 
     print "sup 8&15 over"
+
+
+def sup_no_data():
+    """
+    补无数据 sup_type = 1
+    :return: 
+    """
+    now = datetime.now()
+    bt = datetime(now.year, now.month, now.day)
+    yst = bt - timedelta(days=1)
+    veh_list = get_veh1()
+
+    for veh in veh_list:
+        fetch1(veh, bt, yst, now)
+
+    print "sup 60+8 over"
 
 
 def sup_line():
@@ -809,6 +778,7 @@ def sup_data():
     # sup_0704(td_dict)
     # sup60and8(td_dict, yst_dict)
     sup_missing()
+    sup_no_data()
     print "sup data completed", datetime.now()
 
 
@@ -829,7 +799,7 @@ def sup_night():
     for veh in veh_list:
         fetch2_0(veh, bt, now)
 
-    veh_list = get_veh2_with_accoff_filter()  # acc 关过滤
+    veh_list = get_veh2_with_accoff_filter()        # acc 关过滤
     for veh in veh_list:
         fetch2_1(veh, bt, now)
     print "night completed", datetime.now()
