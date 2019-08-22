@@ -25,6 +25,9 @@ class VehiData:
     def __sub__(self, other):
         return (self.speed_time - other.speed_time).total_seconds()
 
+    def __lt__(self, other):
+        return self.speed_time < other.speed_time
+
     def pass_day(self):
         if self.last_data.speed_time.day != self.speed_time.day:
             return True

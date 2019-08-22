@@ -16,6 +16,7 @@ from time import clock
 from collections import defaultdict
 from strategy_missing import fetch2_0, fetch2_1
 from strategy_nodata import fetch1
+from strategy_night import fetch_night_0, fetch_night_1
 import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 import json
@@ -689,7 +690,7 @@ def sup_missing():
 def sup_no_data():
     """
     补无数据 sup_type = 1
-    :return: 
+    :return:
     """
     now = datetime.now()
     bt = datetime(now.year, now.month, now.day)
@@ -791,6 +792,14 @@ def sup_data_0704():
     print "night 0704 completed", datetime.now()
 
 
+def sup_night_test():
+    now = datetime.now()
+    yst = now - timedelta(days=1)
+    veh_list = get_veh2()
+    for veh in veh_list:
+        fetch_night_0(veh, yst)
+
+
 def sup_night():
     now = datetime.now()
     bt = datetime(now.year, now.month, now.day, hour=19, minute=10)
@@ -806,7 +815,6 @@ def sup_night():
 
 
 delete_today_emulation()
-# sup_missing()
 if __name__ == '__main__':
     logging.basicConfig()
     scheduler = BlockingScheduler()
