@@ -14,9 +14,9 @@ from strategy_missing import ins_15, ins_8, ins_off
 def get_emu_data(conn, bt, et, veh):
     cur = conn.cursor()
     sql = "select longi, lati, speed, direction, speed_time, mdtstatus, alarmstatus, carstate" \
-          " from tb_gps_simulate where vehicle_num = :3 and speed_time >= :1 " \
-          "and speed_time < :2 order by speed_time"
-    tup = (bt, et, veh)
+          " from tb_gps_simulate where vehicle_num = '{0}' and speed_time >= :1 " \
+          "and speed_time < :2 order by speed_time".format(veh)
+    tup = (bt, et)
     cur.execute(sql, tup)
     data_list = []
     for item in cur:

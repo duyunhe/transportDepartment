@@ -5,8 +5,10 @@
 # @File    : strategy_nodata.py
 
 
+import xlrd
 import cx_Oracle
 from datetime import datetime, timedelta
+import copy
 import random
 from struct_808 import VehiData
 
@@ -76,23 +78,27 @@ def fetch1(veh, bt, yst, nw):
             acc_on += 1
         if ch == '2':
             acc_off += 1
-    print veh, acc_on, acc_off
+    # print veh, acc_on, acc_off
     if len(data_list) != 0:
         cursor.close()
         db.close()
         return
     # 查昨日数据
-    sql = "select longi, lati, speed, direction, speed_time, mdtstatus, alarmstatus, carstate" \
-          " from tb_gps_{0}{1:02} where vehicle_num = '{2}' and carstate = '1' " \
-          "and rownum = 1 order by speed_time".format(y, m, veh)
+    y, m = yst.year % 100, yst.month
+    sql = "select longi, lati, speed, angle, stime, alarmstatus, carstate from tb_mdt_status t" \
+          " where vehi_num = '{0}'".format(veh)
     cursor.execute(sql)
+    # sql = "select * from (select longi, lati, speed, direction, speed_time, mdtstatus, alarmstatus, carstate" \
+    #       " from tb_gps_{0}{1:02} where vehicle_num = '{2}' and speed_time >= :1 and " \
+    #       "speed_time < :2 and carstate = '1' order by speed_time desc) where rownum = 1".format(y, m, veh)
+    # cursor.execute(sql, (yst, bt))
     last_valid_data = None
     for item in cursor:
-        longi, lati, speed, direction, speed_time, mdtstatus, alarmstatus, cs = item[:]
+        longi, lati, speed, direction, speed_time, alarmstatus, cs = item[:]
         last_valid_data = VehiData(longi, lati, 0, 0, 0, speed, speed_time, veh,
                                    None, alarmstatus, "000C0003", direction, cs)
     if last_valid_data is None:
-        print "yesterday no data"
+        print veh, "yesterday no data"
         cursor.close()
         db.close()
         return

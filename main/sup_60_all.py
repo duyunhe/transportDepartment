@@ -24,6 +24,7 @@ import urllib2
 from geo import gcj02towgs84, bl2xy, calc_dist, calc_segment_coor, xy2bl, transform
 import matplotlib.pyplot as plt
 from tools import delete_today_emulation
+import threading
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.AL32UTF8'
 
 
@@ -554,7 +555,8 @@ def get_veh1():
     veh_list = []
     xl = xlrd.open_workbook('sup60_8.xlsx')
     sheet = xl.sheet_by_index(0)
-    for i in range(4):
+    n = sheet.nrows
+    for i in range(n):
         val = sheet.cell(i, 0).value
         str_val = val.encode('utf-8')
         veh_list.append(str_val)
@@ -578,7 +580,7 @@ def get_veh2_without_accoff_filter():
 
 
 def get_veh2():
-    veh_list = ['浙A2X302']
+    veh_list = ['浙AL0U38']
     return veh_list
 
 
@@ -687,18 +689,31 @@ def sup_missing():
     print "sup 8&15 over"
 
 
+def thread_fetch1(veh_list):
+    now = datetime.now()
+    bt = datetime(now.year, now.month, now.day)
+    yst = bt - timedelta(days=1)
+    for veh in veh_list:
+        fetch1(veh, bt, yst, now)
+
+
+@debug_time
 def sup_no_data():
     """
     补无数据 sup_type = 1
     :return:
     """
-    now = datetime.now()
-    bt = datetime(now.year, now.month, now.day)
-    yst = bt - timedelta(days=1)
     veh_list = get_veh1()
 
-    for veh in veh_list:
-        fetch1(veh, bt, yst, now)
+    trds = []
+    num = min(20, len(veh_list))       # 20个线程一起查，每个线程查其中一批车辆
+    for i in range(num):
+        t = threading.Thread(target=thread_fetch1, args=(veh_list[i::num], ))
+        trds.append(t)
+    for t in trds:
+        t.start()
+    for t in trds:
+        t.join()
 
     print "sup 60+8 over"
 
@@ -795,29 +810,31 @@ def sup_data_0704():
 def sup_night_test():
     now = datetime.now()
     yst = now - timedelta(days=1)
-    veh_list = get_veh2()
+    yst = datetime(yst.year, yst.month, yst.day, 23, 45)
+    veh_list = get_veh2_without_accoff_filter()
     for veh in veh_list:
         fetch_night_0(veh, yst)
+    print "test over"
 
 
 def sup_night():
     now = datetime.now()
-    bt = datetime(now.year, now.month, now.day, hour=19, minute=10)
 
     veh_list = get_veh2_without_accoff_filter()
     for veh in veh_list:
-        fetch2_0(veh, bt, now)
+        fetch_night_0(veh, now)
 
     veh_list = get_veh2_with_accoff_filter()        # acc 关过滤
     for veh in veh_list:
-        fetch2_1(veh, bt, now)
+        fetch_night_1(veh, now)
     print "night completed", datetime.now()
 
 
 delete_today_emulation()
+# sup_no_data()
 if __name__ == '__main__':
     logging.basicConfig()
     scheduler = BlockingScheduler()
     scheduler.add_job(sup_data, 'cron', hour='19', minute='00', max_instances=10)
-    scheduler.add_job(sup_night, 'cron', hour='23', minute='25', max_instances=10)
+    scheduler.add_job(sup_night, 'cron', hour='23', minute='30', max_instances=10)
     scheduler.start()
