@@ -659,7 +659,6 @@ def sup_missing_test():
     补缺失数据 sup_type = 2
     :return:
     """
-    now = datetime.now()
     bt = datetime(2019, 8, 18)
     et = bt + timedelta(days=1)
     veh_list = get_veh2()
@@ -669,22 +668,47 @@ def sup_missing_test():
     return
 
 
+def thread_fetch_2_0(veh_list):
+    now = datetime.now()
+    bt = datetime(now.year, now.month, now.day, 0)
+    for veh in veh_list:
+        fetch2_0(veh, bt, now)
+
+
+def thread_fetch_2_1(veh_list):
+    now = datetime.now()
+    bt = datetime(now.year, now.month, now.day, 0)
+    for veh in veh_list:
+        fetch2_1(veh, bt, now)
+
+
 @debug_time
 def sup_missing():
     """
     补缺失数据 sup_type = 2
     :return:
     """
-    now = datetime.now()
-    bt = datetime(now.year, now.month, now.day, 0)
-
+    trds = []
     veh_list = get_veh2_without_accoff_filter()
-    for veh in veh_list:
-        fetch2_0(veh, bt, now)
+    num = min(len(veh_list), 30)
+    for i in range(num):
+        t = threading.Thread(target=thread_fetch_2_0, args=(veh_list[i::num], ))
+        trds.append(t)
+    for t in trds:
+        t.start()
+    for t in trds:
+        t.join()
 
+    trds = []
     veh_list = get_veh2_with_accoff_filter()        # acc 关过滤
-    for veh in veh_list:
-        fetch2_1(veh, bt, now)
+    num = min(len(veh_list), 30)
+    for i in range(num):
+        t = threading.Thread(target=thread_fetch_2_1, args=(veh_list[i::num],))
+        trds.append(t)
+    for t in trds:
+        t.start()
+    for t in trds:
+        t.join()
 
     print "sup 8&15 over"
 
@@ -692,7 +716,7 @@ def sup_missing():
 def thread_fetch1(veh_list):
     now = datetime.now()
     bt = datetime(now.year, now.month, now.day)
-    yst = bt - timedelta(days=1)
+    yst = bt - timedelta(days=7)
     for veh in veh_list:
         fetch1(veh, bt, yst, now)
 
@@ -706,7 +730,7 @@ def sup_no_data():
     veh_list = get_veh1()
 
     trds = []
-    num = min(20, len(veh_list))       # 20个线程一起查，每个线程查其中一批车辆
+    num = min(30, len(veh_list))       # 20个线程一起查，每个线程查其中一批车辆
     for i in range(num):
         t = threading.Thread(target=thread_fetch1, args=(veh_list[i::num], ))
         trds.append(t)
@@ -831,7 +855,7 @@ def sup_night():
 
 
 delete_today_emulation()
-# sup_no_data()
+# sup_missing()
 if __name__ == '__main__':
     logging.basicConfig()
     scheduler = BlockingScheduler()
