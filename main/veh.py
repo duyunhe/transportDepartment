@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2019/8/21 14:10
 # @Author  : yhdu@tongwoo.cn
-# @简介    : 
+# @简介    :
 # @File    : veh.py
 
 
@@ -50,6 +50,36 @@ def get_veh1():
     return veh_list
 
 
+def load_txt():
+    fp = open("./data/filterAccOffISU.txt")
+    line = fp.readline()
+    isu = line.strip('\n').split(',')
+    fp.close()
+    print "load isu", len(isu)
+    return isu
+
+
+def load_filtered_veh():
+    isu_list = load_txt()
+    conn = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
+    cur = conn.cursor()
+    sql = "select mdt_no, vehi_no from vw_vehicle t"
+    cur.execute(sql)
+    veh_dict = {}
+    for item in cur:
+        mdt, veh = item[:]
+        veh_dict[mdt] = veh
+    set_400 = set()
+    no_cnt = 0
+    for isu in isu_list:
+        try:
+            veh = veh_dict[isu]
+            set_400.add(veh)
+        except KeyError:
+            no_cnt += 1
+    return set_400
+
+
 def get_veh2_without_accoff_filter():
     veh_list = set()
     xl = xlrd.open_workbook('./data/sup15.xlsx')
@@ -88,5 +118,19 @@ def get_veh2_with_accoff_filter():
     return no_filter_set
 
 
-get_veh2_without_accoff_filter()
-get_veh2_with_accoff_filter()
+def get_veh_city():
+    veh_list = []
+    xl = xlrd.open_workbook('./veh/sup_city.xlsx')
+    sheet = xl.sheet_by_index(0)
+    n = sheet.nrows
+    for i in range(1, n):
+        val = sheet.cell(i, 1).value
+        str_val = val.encode('utf-8')
+        veh_list.append(str_val)
+    print "city data", len(veh_list)
+    return veh_list
+
+
+def get_veh_3_test():
+    veh_list = ['浙A0F964']
+    return veh_list

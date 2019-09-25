@@ -12,11 +12,13 @@ import random
 import os
 import xlrd
 import copy
+from veh import get_veh_city, get_veh_3_test, get_filtered_veh
 from time import clock
 from collections import defaultdict
 from strategy_missing import fetch2_0, fetch2_1
 from strategy_nodata import fetch1
 from strategy_night import fetch_night_0, fetch_night_1
+from strategy_city_foreign import fetch_city
 import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 import json
@@ -543,7 +545,8 @@ def get_veh0():
     veh_list = []
     xl = xlrd.open_workbook('sup60.xlsx')
     sheet = xl.sheet_by_index(0)
-    for i in range(2738):
+    n = sheet.nrows
+    for i in range(n):
         val = sheet.cell(i, 0).value
         str_val = val.encode('utf-8')
         veh_list.append(str_val)
@@ -682,6 +685,12 @@ def thread_fetch_2_1(veh_list):
         fetch2_1(veh, bt, now)
 
 
+def thread_fetch_city(veh_list, filter_set):
+    now = datetime.now()
+    for veh in veh_list:
+        fetch_city(veh, now, filter_set)
+
+
 @debug_time
 def sup_missing():
     """
@@ -730,7 +739,7 @@ def sup_no_data():
     veh_list = get_veh1()
 
     trds = []
-    num = min(30, len(veh_list))       # 20个线程一起查，每个线程查其中一批车辆
+    num = min(30, len(veh_list))       # 30个线程一起查，每个线程查其中一批车辆
     for i in range(num):
         t = threading.Thread(target=thread_fetch1, args=(veh_list[i::num], ))
         trds.append(t)
@@ -815,11 +824,26 @@ def sup_data():
     get_data(td_dict, td, now)
     # get_data(yst_dict, yst, td)
     sup60(td_dict)
-    # sup_0704(td_dict)
-    # sup60and8(td_dict, yst_dict)
     sup_missing()
     sup_no_data()
+    sup_city()
     print "sup data completed", datetime.now()
+
+
+def sup_city():
+    veh_list = get_veh_city()
+    off_filter_set = get_filtered_veh()
+    trds = []
+    num = min(20, len(veh_list))  # 20个线程一起查，每个线程查其中一批车辆
+    for i in range(num):
+        t = threading.Thread(target=thread_fetch_city, args=(veh_list[i::num], off_filter_set))
+        trds.append(t)
+    for t in trds:
+        t.start()
+    for t in trds:
+        t.join()
+
+    print "sup city over"
 
 
 def sup_data_0704():
@@ -855,7 +879,8 @@ def sup_night():
 
 
 delete_today_emulation()
-# sup_missing()
+# sup_data()
+# sup_city()
 if __name__ == '__main__':
     logging.basicConfig()
     scheduler = BlockingScheduler()

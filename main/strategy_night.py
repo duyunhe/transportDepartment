@@ -54,6 +54,12 @@ def get_gps_data(conn, bt, et, veh, filtered=False):
 
 
 def fetch_night_0(veh, now):
+    """
+    补缺失
+    :param veh:
+    :param now:
+    :return:
+    """
     bt = datetime(now.year, now.month, now.day, 17)
     et = now
     db = cx_Oracle.connect("lklh", "lklh", "192.168.0.113/orcl")
