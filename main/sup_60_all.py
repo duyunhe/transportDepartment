@@ -880,7 +880,6 @@ def sup_night():
 
 delete_today_emulation()
 # sup_data()
-# sup_city()
 if __name__ == '__main__':
     logging.basicConfig()
     scheduler = BlockingScheduler()

@@ -20,6 +20,7 @@ def ins_on(conn, gps_data, sup_cnt, backward):
 
     dt = gps_data.speed_time
     gps_data.speed = 0
+    gps_data.state = '000C0003'
     lng, lat = gps_data.lng, gps_data.lat
     for i in range(sup_cnt):
         if backward:
@@ -31,8 +32,34 @@ def ins_on(conn, gps_data, sup_cnt, backward):
         if i % 60 == 0:
             lng += random.uniform(-0.000005, 0.000005)
             lat += random.uniform(-0.000005, 0.000005)
-        tup = (vdata.veh_no, lng, lat, vdata.speed, vdata.orient,
-               vdata.speed_time, datetime.now(), 0, vdata.alarm, vdata.state)
+        tup = (vdata.veh_no, lng, lat, vdata.speed, vdata.orient, vdata.speed_time, datetime.now(), 0, vdata.alarm,
+               vdata.state)
+        tup_list.append(tup)
+
+    cursor.executemany(ins_sql, tup_list)
+    conn.commit()
+    cursor.close()
+
+
+def ins_one(conn, gps_data):
+    cursor = conn.cursor()
+    ins_sql = "insert into tb_gps_simulate(vehicle_num,longi,lati,speed,direction,state,carstate,speed_time,db_time," \
+              "sign,altitude,alarmstatus,mdtstatus,sup_type) values(:1,:2,:3,:4,:5,0,1,:6,:7," \
+              "'0',:8,:9,:10,'3')"
+    tup_list = []
+
+    dt = gps_data.speed_time
+    gps_data.speed = 0
+    gps_data.state = '000C0003'
+    lng, lat = gps_data.lng, gps_data.lat
+    for i in range(1):
+        dt += timedelta(seconds=5)
+        vdata = gps_data
+        vdata.speed_time = dt
+        lng += random.uniform(-0.000005, 0.000005)
+        lat += random.uniform(-0.000005, 0.000005)
+        tup = (vdata.veh_no, lng, lat, vdata.speed, vdata.orient, vdata.speed_time, datetime.now(), 0, vdata.alarm,
+               vdata.state)
         tup_list.append(tup)
 
     cursor.executemany(ins_sql, tup_list)
@@ -50,11 +77,11 @@ def ins_empty(conn, gps_data, sup_cnt, sup_type='3'):
     gps_data.speed = 0
     gps_data.state = '000C0003'
 
+    lng, lat = gps_data.lng, gps_data.lat
     for i in range(sup_cnt):
         vdata = gps_data
         vdata.speed_time = dt
-        lng, lat = vdata.lng, vdata.lat
-        if i % 30 == 0:
+        if i % 60 == 0:
             lng += random.uniform(-0.000005, 0.000005)
             lat += random.uniform(-0.000005, 0.000005)
         tup = (vdata.veh_no, lng, lat, vdata.speed, vdata.orient, vdata.speed_time, datetime.now(), 0, vdata.alarm,
@@ -69,8 +96,9 @@ def ins_empty(conn, gps_data, sup_cnt, sup_type='3'):
             dt += timedelta(minutes=15)
         vdata = gps_data
         vdata.speed_time = dt
-        tup = (vdata.veh_no, vdata.lng, vdata.lat, vdata.speed, vdata.orient, vdata.speed_time, datetime.now(), 0,
-               vdata.alarm, vdata.state)
+        tup = (
+        vdata.veh_no, vdata.lng, vdata.lat, vdata.speed, vdata.orient, vdata.speed_time, datetime.now(), 0, vdata.alarm,
+        vdata.state)
         tup_list.append(tup)
 
     cursor.executemany(ins_sql, tup_list)
@@ -92,9 +120,17 @@ def fetch_city(veh, now, filter_set):
     sup_type = "3"
     on_cnt, off_cnt = 0, 0
     last_data = None
+
+    def_lng, def_lat = None, None
+    all_same = True
     for data in data_list:
         if is_acc_on(data):
             on_cnt += 1
+            if def_lng is None:
+                def_lng, def_lat = data.lng, data.lat
+            else:
+                if def_lng != data.lng or def_lat != data.lat:
+                    all_same = False
         elif not filtered:
             off_cnt += 1
 
@@ -119,37 +155,13 @@ def fetch_city(veh, now, filter_set):
                         ins_empty(conn=db, gps_data=last_data, sup_cnt=sup_cnt, sup_type=sup_type)
                 last_data = data
 
-    data_list = gps_list[::]
-    data_list.extend(get_emu_data(db, bt, et, veh))
-    data_list.sort()
-
-    last_data = None
-    rec_off = 0
-    total_cnt = len(data_list)
-
-    for data in data_list:
-        if last_data:
-            if is_acc_off(data) and is_acc_off(last_data):
-                itv = data - last_data
-                if itv < 14 * 60:
-                    rec_off += 1
-        last_data = data
-    if total_cnt != 0:
-        red_rate = float(rec_off) / total_cnt
-    else:
-        red_rate = 0
-    if rec_off > 10 and red_rate > 0.2:
-        sup_cnt = int(rec_off / 0.15) - total_cnt
-        print veh, "acc off redundancy", round(red_rate, 3)
-        itv0 = (data_list[0].speed_time - bt).total_seconds()
-        if itv0 > 6000:
-            ins_on(db, data_list[0], sup_cnt, True)
-        else:
-            for data in data_list:
-                if last_data is not None:
-                    itv = data - last_data
-                    if itv > 60 * 100:
-                        ins_empty(conn=db, gps_data=last_data, sup_cnt=sup_cnt, sup_type=sup_type)
-                last_data = data
+    if all_same:
+        print veh, "acc on, all same px & py"
+        on_cnt = 0
+        for data in data_list:
+            if is_acc_on(data):
+                on_cnt += 1
+                if on_cnt % 80 == 79:
+                    ins_one(conn=db, gps_data=data)
 
     db.close()
